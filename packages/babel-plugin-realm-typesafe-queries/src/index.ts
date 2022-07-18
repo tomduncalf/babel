@@ -5,18 +5,24 @@ const fs = require("fs");
 const util = require("util");
 
 const makeFilterVisitor = () => {
-  const result = { value: "" };
+  const result = { value: "", captures: [] };
 
   return {
     visitor: {
       BinaryExpression(path) {
+        const operator =
+          path.node.operator === "===" ? "==" : path.node.operator;
+
+        let value;
+        if (path.node.right.type === "Identifier") {
+          value = `$${result.captures.length}`;
+          result.captures.push(path.node.right.name);
+        } else {
+          value = path.node.right.value;
+        }
+
         result.value +=
-          path.node.left.property.name +
-          " " +
-          path.node.operator +
-          " " +
-          path.node.right.value; //path.node.left.name;
-        fs.writeFileSync("/tmp/asd", "asd12:" + result);
+          path.node.left.property.name + " " + operator + " " + value;
       },
     },
     result,
@@ -34,36 +40,12 @@ export default declare(api => {
       ArrowFunctionExpression(path) {
         const visitor = makeFilterVisitor();
         path.traverse(visitor.visitor);
-        path.replaceWith(t.stringLiteral(visitor.result.value));
-        // path.replaceWith(t.stringLiteral("asd"));
-        // path.replaceWith(path.traverse(filterVisitor)); //;//t.stringLiteral("asd"));
-      },
-
-      // MemberExpression(path) {
-      //   fs.writeFileSync("/tmp/asd", util.inspect(path));
-      //   if (path.node.property && path.node.property.name === "filtered") {
-      //     // path.node.arguments[0].replaceWith(t.stringLiteral("asd"));
-      //   }
-      // },
-
-      BinaryExpression(path) {
-        // console.log(path);
-        // path.remove();
-
-        const { node } = path;
-        if (node.operator === "===" && isFilterExpression(node)) {
-          path.replaceWith(
-            t.callExpression(
-              t.memberExpression(node.left, t.identifier("gt")),
-              [node.right],
-            ),
-          );
-        }
+        // path.replaceWith(t.nullLiteral);
+        path.parentPath.node.arguments = [
+          t.stringLiteral(visitor.result.value),
+          ...visitor.result.captures.map(capture => t.identifier(capture)),
+        ];
       },
     },
   };
 });
-
-function isFilterExpression(node: any) {
-  return true;
-}
