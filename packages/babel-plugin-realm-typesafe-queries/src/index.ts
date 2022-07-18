@@ -49,6 +49,20 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
 
         result.value += `${path.node.argument.property.name} == false`;
       },
+
+      LogicalExpression(path) {
+        // result.value += "blah";
+        const leftVisitor = makeFilterVisitor();
+        const rightVisitor = makeFilterVisitor();
+
+        fs.writeFileSync("/tmp/asd", util.inspect(path.get("left")));
+        path.get("left").traverse(leftVisitor.visitor);
+        path.get("right").traverse(rightVisitor.visitor);
+
+        result.value += `(${leftVisitor.result.value} ${path.node.operator} ${rightVisitor.result.value})`;
+
+        path.skip();
+      },
     },
 
     result,
