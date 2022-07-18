@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-node="yarn node"
+# node="yarn node"
+node="replay-node"
 jestArgs=()
 
 if [ "$TEST_DEBUG" ]; then

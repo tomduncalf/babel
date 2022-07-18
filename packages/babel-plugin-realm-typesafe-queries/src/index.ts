@@ -55,9 +55,9 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
         const leftVisitor = makeFilterVisitor();
         const rightVisitor = makeFilterVisitor();
 
-        fs.writeFileSync("/tmp/asd", util.inspect(path.get("left")));
         path.get("left").traverse(leftVisitor.visitor);
         path.get("right").traverse(rightVisitor.visitor);
+        // console.log(path.get("body"), leftVisitor.result);
 
         result.value += `(${leftVisitor.result.value} ${path.node.operator} ${rightVisitor.result.value})`;
 
