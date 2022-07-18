@@ -5,12 +5,18 @@ const fs = require("fs");
 const util = require("util");
 
 const makeFilterVisitor = () => {
-  let result = "";
+  const result = { value: "" };
 
   return {
     visitor: {
       BinaryExpression(path) {
-        result += "lalal"; //path.node.left.name;
+        result.value +=
+          path.node.left.property.name +
+          " " +
+          path.node.operator +
+          " " +
+          path.node.right.value; //path.node.left.name;
+        fs.writeFileSync("/tmp/asd", "asd12:" + result);
       },
     },
     result,
@@ -28,7 +34,7 @@ export default declare(api => {
       ArrowFunctionExpression(path) {
         const visitor = makeFilterVisitor();
         path.traverse(visitor.visitor);
-        path.replaceWith(t.stringLiteral(visitor.result));
+        path.replaceWith(t.stringLiteral(visitor.result.value));
         // path.replaceWith(t.stringLiteral("asd"));
         // path.replaceWith(path.traverse(filterVisitor)); //;//t.stringLiteral("asd"));
       },
