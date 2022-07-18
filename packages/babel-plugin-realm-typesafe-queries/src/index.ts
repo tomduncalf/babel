@@ -1,17 +1,32 @@
 import { declare } from "@babel/helper-plugin-utils";
-import { types as t } from "@babel/core";
+import { PluginPass, types as t } from "@babel/core";
+// import { Visitor } from "babel-traverse";
 // import syntaxTypeScript from "@babel/plugin-syntax-typescript";
 const fs = require("fs");
 const util = require("util");
 
-const makeFilterVisitor = () => {
-  const result = { value: "", captures: [] };
+type FilterVisitorResult = {
+  value: "";
+  captures: string[];
+};
+
+type FilterVisitorReturn = {
+  visitor: Visitor<PluginPass>;
+  result: FilterVisitorResult;
+};
+
+const OPERATOR_MAP = {
+  "===": "==",
+  "!==": "!=",
+};
+
+const makeFilterVisitor = (): FilterVisitorReturn => {
+  const result: FilterVisitorResult = { value: "", captures: [] };
 
   return {
     visitor: {
       BinaryExpression(path) {
-        const operator =
-          path.node.operator === "===" ? "==" : path.node.operator;
+        const operator = OPERATOR_MAP[path.node.operator] || path.node.operator;
 
         let value;
         if (path.node.right.type === "Identifier") {
@@ -24,7 +39,18 @@ const makeFilterVisitor = () => {
         result.value +=
           path.node.left.property.name + " " + operator + " " + value;
       },
+
+      UnaryExpression(path) {
+        if (path.node.operator !== "!") {
+          throw new Error(
+            `Unsupported operator ${path.node.operator} for UnaryExpression`,
+          );
+        }
+
+        result.value += `${path.node.argument.property.name} == false`;
+      },
     },
+
     result,
   };
 };
