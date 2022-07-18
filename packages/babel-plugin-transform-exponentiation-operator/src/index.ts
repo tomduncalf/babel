@@ -12,6 +12,7 @@ export default declare(api => {
       operator: "**",
 
       build(left, right) {
+        console.log({ left, right });
         return t.callExpression(
           t.memberExpression(t.identifier("Math"), t.identifier("pow")),
           [

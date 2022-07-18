@@ -66,6 +66,7 @@
     "./packages/babel-plugin-proposal-throw-expressions/src/**/*.ts",
     "./packages/babel-plugin-proposal-unicode-property-regex/src/**/*.ts",
     "./packages/babel-plugin-proposal-unicode-sets-regex/src/**/*.ts",
+    "./packages/babel-plugin-realm-typesafe-queries/src/**/*.ts",
     "./packages/babel-plugin-syntax-async-do-expressions/src/**/*.ts",
     "./packages/babel-plugin-syntax-decimal/src/**/*.ts",
     "./packages/babel-plugin-syntax-decorators/src/**/*.ts",
@@ -356,6 +357,9 @@
       ],
       "@babel/plugin-proposal-unicode-sets-regex": [
         "./packages/babel-plugin-proposal-unicode-sets-regex/src"
+      ],
+      "@babel/plugin-realm-typesafe-queries": [
+        "./packages/babel-plugin-realm-typesafe-queries/src"
       ],
       "@babel/plugin-syntax-async-do-expressions": [
         "./packages/babel-plugin-syntax-async-do-expressions/src"

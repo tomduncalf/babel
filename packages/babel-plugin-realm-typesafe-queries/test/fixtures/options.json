@@ -1,0 +1,3 @@
+{
+  "plugins": ["transform-typescript", "realm-typesafe-queries"]
+}
