@@ -1,1 +1,1 @@
-123 > 456;
+realm.objects('Test').filtered(o => o.age === 10)
