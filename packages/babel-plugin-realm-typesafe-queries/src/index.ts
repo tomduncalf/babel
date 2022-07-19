@@ -47,7 +47,7 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
                 path.node.left.property.name + " " + operator + " " + value,
               ),
               capture ? t.identifier(capture) : undefined,
-            ].filter(x => !!x),
+            ].filter(x => x !== undefined),
           ),
         );
       },
@@ -68,14 +68,17 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
 
       LogicalExpression: {
         exit(path) {
-          // debugger;
-          path.replaceWith(
-            t.arrayExpression([
-              t.stringLiteral(
-                `${path.node.left.elements[0].value} ${path.node.operator} ${path.node.right.elements[0].value}`,
-              ),
-            ]),
-          );
+          debugger;
+          const els = [
+            t.stringLiteral(
+              `${path.node.left.elements[0].value} ${path.node.operator} ${path.node.right.elements[0].value}`,
+            ),
+            path.node.left.elements[1],
+            path.node.right.elements[1],
+          ].filter(x => x !== undefined);
+
+          console.log({ els });
+          path.replaceWith(t.arrayExpression(els));
 
           console.log(path.toString());
         },
