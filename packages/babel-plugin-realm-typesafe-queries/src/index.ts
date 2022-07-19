@@ -23,6 +23,7 @@ const OPERATOR_MAP = {
 
 const makeFilterVisitor = (): FilterVisitorReturn => {
   const result: FilterVisitorResult = { value: "", captures: [] };
+  let captures = 0;
 
   return {
     visitor: {
@@ -32,8 +33,9 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
         let value;
         let capture;
         if (path.node.right.type === "Identifier") {
-          value = `$${result.captures.length}`;
+          value = `$${captures}`;
           capture = path.node.right.name;
+          captures++;
         } else {
           value = path.node.right.value;
         }
