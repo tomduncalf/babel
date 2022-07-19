@@ -26,6 +26,7 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
   return {
     visitor: {
       BinaryExpression(path) {
+        console.log("filter BinaryExpression");
         const operator = OPERATOR_MAP[path.node.operator] || path.node.operator;
 
         let value;
@@ -36,33 +37,40 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
           value = path.node.right.value;
         }
 
-        result.value +=
-          path.node.left.property.name + " " + operator + " " + value;
+        path.replaceWith(
+          t.stringLiteral(
+            path.node.left.property.name + " " + operator + " " + value,
+          ),
+        );
       },
 
       UnaryExpression(path) {
+        console.log("filter UnaryExpression");
+
         if (path.node.operator !== "!") {
           throw new Error(
             `Unsupported operator ${path.node.operator} for UnaryExpression`,
           );
         }
 
-        result.value += `${path.node.argument.property.name} == false`;
+        path.replaceWith(
+          t.stringLiteral(`${path.node.argument.property.name} == false`),
+        );
       },
 
-      LogicalExpression(path) {
-        // result.value += "blah";
-        const leftVisitor = makeFilterVisitor();
-        const rightVisitor = makeFilterVisitor();
+      // LogicalExpression(path) {
+      //   // result.value += "blah";
+      //   const leftVisitor = makeFilterVisitor();
+      //   const rightVisitor = makeFilterVisitor();
 
-        path.get("left").traverse(leftVisitor.visitor);
-        path.get("right").traverse(rightVisitor.visitor);
-        // console.log(path.get("body"), leftVisitor.result);
+      //   path.get("left").traverse(leftVisitor.visitor);
+      //   path.get("right").traverse(rightVisitor.visitor);
+      //   // console.log(path.get("body"), leftVisitor.result);
 
-        result.value += `(${leftVisitor.result.value} ${path.node.operator} ${rightVisitor.result.value})`;
+      //   result.value += `(${leftVisitor.result.value} ${path.node.operator} ${rightVisitor.result.value})`;
 
-        path.skip();
-      },
+      //   path.skip();
+      // },
     },
 
     result,
@@ -78,13 +86,17 @@ export default declare(api => {
 
     visitor: {
       ArrowFunctionExpression(path) {
+        console.log("ArroWfunction");
+
         const visitor = makeFilterVisitor();
         path.traverse(visitor.visitor);
+        // console.log(path.node.body); //.forEach(x => console.log(x))); // .get("body"));
+        path.replaceWith(path.node.body);
         // path.replaceWith(t.nullLiteral);
-        path.parentPath.node.arguments = [
-          t.stringLiteral(visitor.result.value),
-          ...visitor.result.captures.map(capture => t.identifier(capture)),
-        ];
+        // path.parentPath.node.arguments = [
+        //   t.stringLiteral(visitor.result.value),
+        //   ...visitor.result.captures.map(capture => t.identifier(capture)),
+        // ];
       },
     },
   };
