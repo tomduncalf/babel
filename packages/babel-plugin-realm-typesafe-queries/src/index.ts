@@ -26,7 +26,6 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
   return {
     visitor: {
       BinaryExpression(path) {
-        console.log("filter BinaryExpression");
         const operator = OPERATOR_MAP[path.node.operator] || path.node.operator;
 
         let value;
@@ -51,8 +50,6 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
       },
 
       UnaryExpression(path) {
-        console.log("filter UnaryExpression");
-
         if (path.node.operator !== "!") {
           throw new Error(
             `Unsupported operator ${path.node.operator} for UnaryExpression`,
@@ -60,7 +57,9 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
         }
 
         path.replaceWith(
-          t.stringLiteral(`${path.node.argument.property.name} == false`),
+          t.arrayExpression([
+            t.stringLiteral(`${path.node.argument.property.name} == false`),
+          ]),
         );
       },
 
@@ -92,15 +91,13 @@ export default declare(api => {
 
     visitor: {
       ArrowFunctionExpression(path) {
-        console.log("ArroWfunction");
-
         const visitor = makeFilterVisitor();
         path.traverse(visitor.visitor);
         // console.log(path.node.body); //.forEach(x => console.log(x))); // .get("body"));
         const body = path.node.body;
         // debugger;
         // path.node.params = [body.elements[0], body.elements[1]
-        path.parentPath.node.arguments = [body.elements[0], body.elements[1]];
+        path.parentPath.node.arguments = body.elements;
         debugger;
         // debugger;
         // path.replaceWith(t.argumentPlaceholder());
