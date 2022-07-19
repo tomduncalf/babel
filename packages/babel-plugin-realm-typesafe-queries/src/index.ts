@@ -1,6 +1,7 @@
 import { declare } from "@babel/helper-plugin-utils";
 import { PluginPass, types as t } from "@babel/core";
 import { Visitor } from "@babel/traverse";
+import { exit } from "process";
 // import syntaxTypeScript from "@babel/plugin-syntax-typescript";
 const fs = require("fs");
 const util = require("util");
@@ -63,7 +64,11 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
         );
       },
 
-      // LogicalExpression(path) {
+      LogicalExpression: {
+        exit(path) {
+          console.log(path.toString());
+        },
+      },
       //   // result.value += "blah";
       //   const leftVisitor = makeFilterVisitor();
       //   const rightVisitor = makeFilterVisitor();
