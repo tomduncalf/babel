@@ -68,6 +68,15 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
 
       LogicalExpression: {
         exit(path) {
+          // debugger;
+          path.replaceWith(
+            t.arrayExpression([
+              t.stringLiteral(
+                `${path.node.left.elements[0].value} ${path.node.operator} ${path.node.right.elements[0].value}`,
+              ),
+            ]),
+          );
+
           console.log(path.toString());
         },
       },
@@ -106,22 +115,27 @@ export default declare(api => {
     // inherits: syntaxTypeScript,
 
     visitor: {
-      ArrowFunctionExpression(path) {
-        const visitor = makeFilterVisitor();
-        path.traverse(visitor.visitor);
-        // console.log(path.node.body); //.forEach(x => console.log(x))); // .get("body"));
-        const body = path.node.body;
-        // debugger;
-        // path.node.params = [body.elements[0], body.elements[1]
-        path.parentPath.node.arguments = body.elements;
-        // debugger;
-        // debugger;
-        // path.replaceWith(t.argumentPlaceholder());
-        // path.replaceWith(t.nullLiteral);
-        // path.parentPath.node.arguments = [
-        //   t.stringLiteral(visitor.result.value),
-        //   ...visitor.result.captures.map(capture => t.identifier(capture)),
-        // ];
+      ArrowFunctionExpression: {
+        enter(path) {
+          const visitor = makeFilterVisitor();
+          path.traverse(visitor.visitor);
+          // console.log(path.node.body); //.forEach(x => console.log(x))); // .get("body"));
+          const body = path.node.body;
+          // debugger;
+          // path.node.params = [body.elements[0], body.elements[1]
+          path.parentPath.node.arguments = body.elements;
+          // debugger;
+          // debugger;
+          // path.replaceWith(t.argumentPlaceholder());
+          // path.replaceWith(t.nullLiteral);
+          // path.parentPath.node.arguments = [
+          //   t.stringLiteral(visitor.result.value),
+          //   ...visitor.result.captures.map(capture => t.identifier(capture)),
+          // ];
+        },
+        exit(path) {
+          console.log("exit", path.toString());
+        },
       },
     },
   };
