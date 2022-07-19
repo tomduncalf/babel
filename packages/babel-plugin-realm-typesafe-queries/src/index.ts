@@ -30,16 +30,22 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
         const operator = OPERATOR_MAP[path.node.operator] || path.node.operator;
 
         let value;
+        let capture;
         if (path.node.right.type === "Identifier") {
           value = `$${result.captures.length}`;
-          result.captures.push(path.node.right.name);
+          capture = path.node.right.name;
         } else {
           value = path.node.right.value;
         }
 
         path.replaceWith(
-          t.stringLiteral(
-            path.node.left.property.name + " " + operator + " " + value,
+          t.arrayExpression(
+            [
+              t.stringLiteral(
+                path.node.left.property.name + " " + operator + " " + value,
+              ),
+              capture ? t.identifier(capture) : undefined,
+            ].filter(x => !!x),
           ),
         );
       },
@@ -91,7 +97,13 @@ export default declare(api => {
         const visitor = makeFilterVisitor();
         path.traverse(visitor.visitor);
         // console.log(path.node.body); //.forEach(x => console.log(x))); // .get("body"));
-        path.replaceWith(path.node.body);
+        const body = path.node.body;
+        // debugger;
+        // path.node.params = [body.elements[0], body.elements[1]
+        path.parentPath.node.arguments = [body.elements[0], body.elements[1]];
+        debugger;
+        // debugger;
+        // path.replaceWith(t.argumentPlaceholder());
         // path.replaceWith(t.nullLiteral);
         // path.parentPath.node.arguments = [
         //   t.stringLiteral(visitor.result.value),
