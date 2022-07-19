@@ -69,6 +69,15 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
           console.log(path.toString());
         },
       },
+
+      MemberExpression(path) {
+        // debugger;
+        path.replaceWith(
+          t.arrayExpression([
+            t.stringLiteral(`${path.node.property.name} == true`),
+          ]),
+        );
+      },
       //   // result.value += "blah";
       //   const leftVisitor = makeFilterVisitor();
       //   const rightVisitor = makeFilterVisitor();
@@ -103,7 +112,7 @@ export default declare(api => {
         // debugger;
         // path.node.params = [body.elements[0], body.elements[1]
         path.parentPath.node.arguments = body.elements;
-        debugger;
+        // debugger;
         // debugger;
         // path.replaceWith(t.argumentPlaceholder());
         // path.replaceWith(t.nullLiteral);
