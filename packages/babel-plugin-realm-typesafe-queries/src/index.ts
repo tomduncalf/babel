@@ -123,7 +123,7 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
                 t.stringLiteral(
                   `${path.node.elements[1].value}${path.node.elements[2].elements[0].value}`,
                 ),
-                // other args
+                ...path.node.elements[2].elements.slice(1),
               ]),
             );
           }
