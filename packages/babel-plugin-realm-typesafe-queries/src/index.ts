@@ -82,10 +82,10 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
         exit(path) {
           const els = [
             t.stringLiteral(
-              `${path.node.left.elements[0].value} ${path.node.operator} ${path.node.right.elements[0].value}`,
+              `(${path.node.left.elements[0].value} ${path.node.operator} ${path.node.right.elements[0].value})`,
             ),
-            path.node.left.elements[1],
-            path.node.right.elements[1],
+            ...path.node.left.elements.slice(1),
+            ...path.node.right.elements.slice(1),
           ].filter(x => x !== undefined);
 
           // console.log({ els });
