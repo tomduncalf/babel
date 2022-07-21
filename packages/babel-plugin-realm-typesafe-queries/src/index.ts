@@ -120,6 +120,13 @@ export default declare(api => {
     visitor: {
       ArrowFunctionExpression: {
         enter(path) {
+          if (
+            path.parentPath?.parentPath?.node?.expression?.callee?.property
+              ?.name !== "filtered"
+          ) {
+            return;
+          }
+
           const visitor = makeFilterVisitor();
           path.traverse(visitor.visitor);
           // console.log(path.node.body); //.forEach(x => console.log(x))); // .get("body"));
