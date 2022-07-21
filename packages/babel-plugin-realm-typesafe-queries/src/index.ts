@@ -21,6 +21,13 @@ const OPERATOR_MAP = {
   "!==": "!=",
 };
 
+const STRING_FN_MAP = {
+  startsWith: "BEGINSWITH",
+  endsWidth: "ENDSWITH",
+  contains: "CONTAINS",
+  like: "LIKE",
+};
+
 const makeFilterVisitor = (): FilterVisitorReturn => {
   const result: FilterVisitorResult = { value: "", captures: [] };
   let captures = 0;
@@ -68,7 +75,6 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
 
       LogicalExpression: {
         exit(path) {
-          debugger;
           const els = [
             t.stringLiteral(
               `${path.node.left.elements[0].value} ${path.node.operator} ${path.node.right.elements[0].value}`,
@@ -86,11 +92,43 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
 
       MemberExpression(path) {
         // debugger;
-        path.replaceWith(
-          t.arrayExpression([
-            t.stringLiteral(`${path.node.property.name} == true`),
-          ]),
-        );
+        const stringFn = STRING_FN_MAP[path.node.property?.name];
+        if (stringFn) {
+          debugger;
+
+          // TODO duplicated logic
+          let value;
+          let capture;
+          const valueNode = path.parentPath.node.arguments[0];
+          if (valueNode.type === "Identifier") {
+            value = `$${captures}`;
+            capture = valueNode.name;
+            captures++;
+          } else {
+            value = `"${valueNode.value}"`;
+          }
+
+          const property = path.node.object.property.name;
+          const modifier = path.parentPath.node.arguments[1]?.value
+            ? "[c]"
+            : "";
+
+          path.parentPath.replaceWith(
+            t.arrayExpression(
+              [
+                t.stringLiteral(`${property} ${stringFn}${modifier} ${value}`),
+                capture ? t.identifier(capture) : undefined,
+              ].filter(x => x !== undefined),
+            ),
+          );
+        } else {
+          // unary true operator
+          path.replaceWith(
+            t.arrayExpression([
+              t.stringLiteral(`${path.node.property.name} == true`),
+            ]),
+          );
+        }
       },
       //   // result.value += "blah";
       //   const leftVisitor = makeFilterVisitor();
