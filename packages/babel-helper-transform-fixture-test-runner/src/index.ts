@@ -512,7 +512,6 @@ export default function (
     if (suiteOpts.ignoreSuites?.includes(testSuite.title)) continue;
 
     describe(name + "/" + testSuite.title, function () {
-      console.log(testSuite.tests)
       for (const task of testSuite.tests) {
         if (
           suiteOpts.ignoreTasks?.includes(task.title) ||

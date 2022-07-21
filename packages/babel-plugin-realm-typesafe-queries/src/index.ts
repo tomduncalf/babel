@@ -28,6 +28,11 @@ const STRING_FN_MAP = {
   like: "LIKE",
 };
 
+const ARRAY_FN_MAP = {
+  any: "ANY",
+  all: "ALL",
+};
+
 const makeFilterVisitor = (): FilterVisitorReturn => {
   const result: FilterVisitorResult = { value: "", captures: [] };
   let captures = 0;
@@ -90,12 +95,30 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
         },
       },
 
+      CallExpression: {
+        enter(path) {
+          // debugger;
+          // path.skip();
+          path.replaceWith(path.node.callee);
+        },
+
+        // handle array method calls like .any(x => x.y === z)
+        exit(path) {
+          debugger;
+          // get the string value out of the expression and prefix it with the operator
+          path.replaceWith(
+            //${ARRAY_FN_MAP[path.]
+            t.stringLiteral(path.node.arguments[0].body.elements[0]),
+          );
+        },
+      },
+
       MemberExpression(path) {
         // debugger;
+        // handle calls to string methods
+
         const stringFn = STRING_FN_MAP[path.node.property?.name];
         if (stringFn) {
-          debugger;
-
           // TODO duplicated logic
           let value;
           let capture;
@@ -122,11 +145,13 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
             ),
           );
         } else {
+          const { name } = path.node.property;
+          // TODO hack
+          if (name === "any" || name === "all") return;
+
           // unary true operator
           path.replaceWith(
-            t.arrayExpression([
-              t.stringLiteral(`${path.node.property.name} == true`),
-            ]),
+            t.arrayExpression([t.stringLiteral(`${name} == true`)]),
           );
         }
       },
