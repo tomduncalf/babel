@@ -100,9 +100,12 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
         // by encoding instructions in an ArrayExpression to concatenate a prefix
         // to the resulting output from parsing the rest of this subtree
         enter(path) {
-          debugger;
           // path.skip();
           const fn = ARRAY_FN_MAP[path.node.callee.property.name];
+          // TODO this is a hack so that we also handle string methods, but really these should
+          // be handled in this fn too, i guess (as call expressions not member expressions)
+          if (!fn) return;
+
           const name = path.node.callee.object.property.name;
           path.replaceWith(
             t.arrayExpression([
@@ -133,7 +136,7 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
       },
 
       MemberExpression(path) {
-        // debugger;
+        debugger;
         // handle calls to string methods
 
         const stringFn = STRING_FN_MAP[path.node.property?.name];
@@ -165,8 +168,6 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
           );
         } else {
           const { name } = path.node.property;
-          // TODO hack
-          if (name === "any" || name === "all") return;
 
           // unary true operator
           path.replaceWith(
