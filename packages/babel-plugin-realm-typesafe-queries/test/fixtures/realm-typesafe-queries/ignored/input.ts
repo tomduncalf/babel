@@ -1,1 +1,0 @@
-myThing.doSomething(a => a.age > age);

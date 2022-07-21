@@ -77,10 +77,10 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
             path.node.right.elements[1],
           ].filter(x => x !== undefined);
 
-          console.log({ els });
+          // console.log({ els });
           path.replaceWith(t.arrayExpression(els));
 
-          console.log(path.toString());
+          // console.log(path.toString());
         },
       },
 
@@ -120,13 +120,11 @@ export default declare(api => {
     visitor: {
       ArrowFunctionExpression: {
         enter(path) {
-          if (
-            path.parentPath?.parentPath?.node?.expression?.callee?.property
-              ?.name !== "filtered"
-          ) {
+          const caller = path.parent?.callee?.property?.name;
+
+          if (caller !== "filtered") {
             return;
           }
-
           const visitor = makeFilterVisitor();
           path.traverse(visitor.visitor);
           // console.log(path.node.body); //.forEach(x => console.log(x))); // .get("body"));
@@ -142,9 +140,6 @@ export default declare(api => {
           //   t.stringLiteral(visitor.result.value),
           //   ...visitor.result.captures.map(capture => t.identifier(capture)),
           // ];
-        },
-        exit(path) {
-          console.log("exit", path.toString());
         },
       },
     },
