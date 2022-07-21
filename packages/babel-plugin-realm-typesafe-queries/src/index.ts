@@ -96,20 +96,39 @@ const makeFilterVisitor = (): FilterVisitorReturn => {
       },
 
       CallExpression: {
-        enter(path) {
-          // debugger;
-          // path.skip();
-          path.replaceWith(path.node.callee);
-        },
-
         // handle array method calls like .any(x => x.y === z)
-        exit(path) {
+        // by encoding instructions in an ArrayExpression to concatenate a prefix
+        // to the resulting output from parsing the rest of this subtree
+        enter(path) {
           debugger;
-          // get the string value out of the expression and prefix it with the operator
+          // path.skip();
+          const fn = ARRAY_FN_MAP[path.node.callee.property.name];
+          const name = path.node.callee.object.property.name;
           path.replaceWith(
-            //${ARRAY_FN_MAP[path.]
-            t.stringLiteral(path.node.arguments[0].body.elements[0]),
+            t.arrayExpression([
+              t.stringLiteral("__CONCATENATE__"),
+              t.stringLiteral(`${fn} ${name}.`),
+              path.node.arguments[0].body,
+            ]),
           );
+        },
+      },
+
+      ArrayExpression: {
+        // Handle encoded instructions after all nodes have been visited
+        exit(path) {
+          if (path.node.elements[0].value === "__CONCATENATE__") {
+            path.replaceWith(
+              t.arrayExpression([
+                t.stringLiteral(
+                  `${path.node.elements[1].value}${path.node.elements[2].elements[0].value}`,
+                ),
+                // other args
+              ]),
+            );
+          }
+          debugger;
+          // path.replaceWith(t.stringLiteral())
         },
       },
 
