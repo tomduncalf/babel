@@ -1,8 +1,10 @@
-import testRunner from "@babel/helper-transform-fixture-test-runner";
+import testRunner, {
+  SuiteOptions,
+} from "@babel/helper-transform-fixture-test-runner";
 import path from "path";
 import { URL } from "url";
 
-export default function (loc: string) {
+export default function (loc: string, options: SuiteOptions = {}) {
   if (!process.env.BABEL_8_BREAKING) {
     if (!loc.startsWith("file://")) {
       const name = path.basename(path.dirname(loc));
@@ -20,5 +22,5 @@ export default function (loc: string) {
 
   const name = path.basename(new URL("..", loc).pathname);
 
-  testRunner(fixtures, name);
+  testRunner(fixtures, name, options);
 }
