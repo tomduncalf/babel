@@ -496,6 +496,7 @@ declare global {
 export type SuiteOptions = {
   ignoreSuites?: string[];
   ignoreTasks?: string[];
+  onlyTasks?: string[];
 };
 
 export default function (
@@ -514,7 +515,8 @@ export default function (
       for (const task of testSuite.tests) {
         if (
           suiteOpts.ignoreTasks?.includes(task.title) ||
-          suiteOpts.ignoreTasks?.includes(testSuite.title + "/" + task.title)
+          suiteOpts.ignoreTasks?.includes(testSuite.title + "/" + task.title) ||
+          (suiteOpts.onlyTasks && !suiteOpts.onlyTasks.includes(task.title))
         ) {
           continue;
         }
