@@ -23,7 +23,7 @@ const OPERATOR_MAP = {
 
 const STRING_FN_MAP = {
   startsWith: "BEGINSWITH",
-  endsWidth: "ENDSWITH",
+  endsWith: "ENDSWITH",
   contains: "CONTAINS",
   like: "LIKE",
 };

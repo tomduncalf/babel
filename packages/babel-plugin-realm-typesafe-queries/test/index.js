@@ -1,7 +1,7 @@
 import runner from "@babel/helper-plugin-test-runner";
 
 runner(import.meta.url, {
-  onlyTasks: ["collection operators"],
+  // onlyTasks: ["collection operators"],
   // [
   //   "react",
   //   "array methods",
