@@ -1,9 +1,11 @@
 import runner from "@babel/helper-plugin-test-runner";
 
 runner(import.meta.url, {
-  onlyTasks: ["react"],
-  //   // "array methods",
+  onlyTasks: ["collection operators"],
+  // [
+  //   "react",
+  //   "array methods",
   //   "string methods",
-  //   // "unary operators",
+  //   "unary operators",
   // ],
 });
