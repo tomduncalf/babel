@@ -104,37 +104,69 @@ const makeFilterVisitor = (): Visitor<PluginPass> => {
       },
     },
 
-    // Convert call expressions on arrays e.g. `t.children.any(c => c.name === name)` into
-    // their RQL equivalent.
-    //
-    // The result is stored by replacing the node with an ArrayExpression of the form:
-    // `['__CONCATENATE__', 'ANY children.', (binary expression node)], in order to allow
-    // the visitor to then recusively visit the expression node and change it into:
-    // `['__CONCATENATE__', 'ANY children.', ['name == $0', name]]`, which the ArrayExpression
-    // handler then converts back to a single string.
+    // Handle "fake" call expressions on arrays and strings.
+    // See inline documentation.
     CallExpression: {
-      // handle array method calls like .any(x => x.y === z)
-      // by encoding instructions in an ArrayExpression to concatenate a prefix
-      // to the resulting output from parsing the rest of this subtree
       enter(path) {
-        // path.skip();
-        const fn = ARRAY_FN_MAP[path.node.callee.property.name];
-        // TODO this is a hack so that we also handle string methods, but really these should
-        // be handled in this fn too, i guess (as call expressions not member expressions)
-        if (!fn) return;
+        if (ARRAY_FN_MAP[path.node.callee.property.name]) {
+          // Convert call expressions on arrays e.g. `t.children.any(c => c.name === name)` into
+          // their RQL equivalent.
+          //
+          // The result is stored by replacing the node with an ArrayExpression of the form:
+          // `['__CONCATENATE__', 'ANY children.', (binary expression node)], in order to allow
+          // the visitor to then recusively visit the expression node and change it into:
+          // `['__CONCATENATE__', 'ANY children.', ['name == $0', name]]`, which the ArrayExpression
+          // handler then converts back to a single string.
 
-        const name = path.node.callee.object.property.name;
-        path.replaceWith(
-          t.arrayExpression([
-            t.stringLiteral("__CONCATENATE__"),
-            t.stringLiteral(`${fn} ${name}.`),
-            path.node.arguments[0].body,
-          ]),
-        );
+          const fn = ARRAY_FN_MAP[path.node.callee.property.name];
+
+          const name = path.node.callee.object.property.name;
+          path.replaceWith(
+            t.arrayExpression([
+              t.stringLiteral("__CONCATENATE__"),
+              t.stringLiteral(`${fn} ${name}.`),
+              path.node.arguments[0].body,
+            ]),
+          );
+        } else if (STRING_FN_MAP[path.node.callee.property.name]) {
+          // Convert call expressions on strings e.g. `t.name.startsWith(query)` into
+          // their RQL equivalent.
+          //
+          // The result is stored by replacing the node with an ArrayExpression of the form:
+          // `['name BEGINSWITH $0', query]`
+
+          const fn = STRING_FN_MAP[path.node.callee.property.name];
+
+          // TODO duplicated logic with BinaryExpression
+          let value;
+          let capture;
+
+          const valueNode = path.node.arguments[0];
+          if (valueNode.type === "Identifier") {
+            value = `$${referencedVariableCount}`;
+            capture = valueNode.name;
+            referencedVariableCount++;
+          } else {
+            value = `"${valueNode.value}"`;
+          }
+
+          const property = path.node.callee.object.property.name;
+          const modifier = path.node.arguments[1]?.value ? "[c]" : "";
+
+          path.replaceWith(
+            t.arrayExpression(
+              [
+                t.stringLiteral(`${property} ${fn}${modifier} ${value}`),
+                capture ? t.identifier(capture) : undefined,
+              ].filter(x => x !== undefined),
+            ),
+          );
+        }
       },
     },
 
-    // Handle instructions encoded into an array by other nodes e.g. concatenation
+    // Handle instructions encoded into an array by other nodes e.g. concatenation.
+    // See inline documentation.
     ArrayExpression: {
       exit(path) {
         // Converts an instruction in the form: `['__CONCATENATE__', 'ANY children.', ['name == $0', name]]`
@@ -152,40 +184,13 @@ const makeFilterVisitor = (): Visitor<PluginPass> => {
       },
     },
 
+    // Convert "truthy" member expressions (e.g. `t.completed`) into their RQL equivalent.
+    // The result is stored by replacing the node with an ArrayExpression of the form:
+    // `['completed == true']`
     MemberExpression(path) {
-      const stringFn = STRING_FN_MAP[path.node.property?.name];
-      if (stringFn) {
-        // TODO duplicated logic
-        let value;
-        let capture;
-        const valueNode = path.parentPath.node.arguments[0];
-        if (valueNode.type === "Identifier") {
-          value = `$${referencedVariableCount}`;
-          capture = valueNode.name;
-          referencedVariableCount++;
-        } else {
-          value = `"${valueNode.value}"`;
-        }
+      const { name } = path.node.property;
 
-        const property = path.node.object.property.name;
-        const modifier = path.parentPath.node.arguments[1]?.value ? "[c]" : "";
-
-        path.parentPath.replaceWith(
-          t.arrayExpression(
-            [
-              t.stringLiteral(`${property} ${stringFn}${modifier} ${value}`),
-              capture ? t.identifier(capture) : undefined,
-            ].filter(x => x !== undefined),
-          ),
-        );
-      } else {
-        const { name } = path.node.property;
-
-        // unary true operator
-        path.replaceWith(
-          t.arrayExpression([t.stringLiteral(`${name} == true`)]),
-        );
-      }
+      path.replaceWith(t.arrayExpression([t.stringLiteral(`${name} == true`)]));
     },
   };
 };
