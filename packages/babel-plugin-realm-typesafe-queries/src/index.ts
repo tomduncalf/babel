@@ -1,26 +1,15 @@
 import { declare } from "@babel/helper-plugin-utils";
 import { PluginPass, types as t } from "@babel/core";
+// eslint-disable-next-line
 import { Visitor } from "@babel/traverse";
-import { exit } from "process";
-// import syntaxTypeScript from "@babel/plugin-syntax-typescript";
-const fs = require("fs");
-const util = require("util");
 
-type FilterVisitorResult = {
-  value: "";
-  captures: string[];
-};
-
-type FilterVisitorReturn = {
-  visitor: Visitor<PluginPass>;
-  result: FilterVisitorResult;
-};
-
+// Map JS operators to RQL operators
 const OPERATOR_MAP = {
   "===": "==",
   "!==": "!=",
 };
 
+// Map JS string functions (fake - they only exist as Typescript definitions)  to RQL operators
 const STRING_FN_MAP = {
   startsWith: "BEGINSWITH",
   endsWith: "ENDSWITH",
@@ -28,168 +17,176 @@ const STRING_FN_MAP = {
   like: "LIKE",
 };
 
+// Map JS array functions (fake - they only exist as Typescript definitions) to RQL operators
 const ARRAY_FN_MAP = {
   any: "ANY",
   all: "ALL",
 };
 
-const makeFilterVisitor = (): FilterVisitorReturn => {
-  const result: FilterVisitorResult = { value: "", captures: [] };
-  let captures = 0;
+// Returns a new FilterVisitor, which visits a Realm JS typesafe query expression and converts
+// it into an RQL query string, and stores any captured variables used by the query.
+//
+// The output of the FilterVisitor is an ArrayExpression of the form:
+// `["RQL query as string", capturedVariableName1, capturedVariableName2, ...]`
+// which is then transformed back into args for the call to `.filtered`
+const makeFilterVisitor = (): Visitor<PluginPass> => {
+  // Keep count of the number of referenced variables we've encountered
+  // so that we can replace with the appropriate `$x` placeholder
+  let referencedVariableCount = 0;
 
   return {
-    visitor: {
-      BinaryExpression(path) {
-        const operator = OPERATOR_MAP[path.node.operator] || path.node.operator;
+    // Convert binary expressions (e.g. `t.age > 30` or `t.age > ageQuery`) into their RQL equivalent.
+    // The result is stored by replacing the node with an ArrayExpression of the form:
+    // `["age > 30"]` or `["age > $0", ageQuery]` (where `ageQuery` is a variable in the current scope)
+    BinaryExpression(path) {
+      const operator = OPERATOR_MAP[path.node.operator] || path.node.operator;
 
+      let value;
+      let capture;
+      if (path.node.right.type === "Identifier") {
+        // If the right-hand node is an identifier, we are referring to a variable
+        value = `$${referencedVariableCount}`;
+        capture = path.node.right.name;
+        referencedVariableCount++;
+      } else {
+        // Otherwise it is a value
+        value = path.node.right.value;
+      }
+
+      // Replace the node with the ArrayExpression to store the intermediate result
+      path.replaceWith(
+        t.arrayExpression(
+          [
+            t.stringLiteral(
+              `${path.node.left.property.name} ${operator} ${value}`,
+            ),
+            capture ? t.identifier(capture) : undefined,
+          ].filter(x => x !== undefined),
+        ),
+      );
+    },
+
+    // Convert unary expressions (`!t.completed`) into their RQL equivalent.
+    // The result is stored by replacing the node with an ArrayExpression of the form:
+    // `["t.completed == false"]`
+    UnaryExpression(path) {
+      if (path.node.operator !== "!") {
+        throw new Error(
+          `Unsupported operator ${path.node.operator} for UnaryExpression`,
+        );
+      }
+
+      path.replaceWith(
+        t.arrayExpression([
+          t.stringLiteral(`${path.node.argument.property.name} == false`),
+        ]),
+      );
+    },
+
+    // Convert logical expressions (e.g. `t.age > 30 || t.name === name` - more generally,
+    // `expressionA || expressionB`) into their RQL equivalent. The individual expressions
+    // (or any nested logical expressions) will be recursively transformed into their RQL
+    // equivalent by the visitor.
+    //
+    // The result is stored by replacing the node with an ArrayExpression of the form:
+    // `['(t.age > 30 || t.name == $0)', name]
+    LogicalExpression: {
+      exit(path) {
+        const els = [
+          t.stringLiteral(
+            `(${path.node.left.elements[0].value} ${path.node.operator} ${path.node.right.elements[0].value})`,
+          ),
+          ...path.node.left.elements.slice(1),
+          ...path.node.right.elements.slice(1),
+        ].filter(x => x !== undefined);
+
+        path.replaceWith(t.arrayExpression(els));
+      },
+    },
+
+    // Convert call expressions on arrays e.g. `t.children.any(c => c.name === name)` into
+    // their RQL equivalent.
+    //
+    // The result is stored by replacing the node with an ArrayExpression of the form:
+    // `['__CONCATENATE__', 'ANY children.', (binary expression node)], in order to allow
+    // the visitor to then recusively visit the expression node and change it into:
+    // `['__CONCATENATE__', 'ANY children.', ['name == $0', name]]`, which the ArrayExpression
+    // handler then converts back to a single string.
+    CallExpression: {
+      // handle array method calls like .any(x => x.y === z)
+      // by encoding instructions in an ArrayExpression to concatenate a prefix
+      // to the resulting output from parsing the rest of this subtree
+      enter(path) {
+        // path.skip();
+        const fn = ARRAY_FN_MAP[path.node.callee.property.name];
+        // TODO this is a hack so that we also handle string methods, but really these should
+        // be handled in this fn too, i guess (as call expressions not member expressions)
+        if (!fn) return;
+
+        const name = path.node.callee.object.property.name;
+        path.replaceWith(
+          t.arrayExpression([
+            t.stringLiteral("__CONCATENATE__"),
+            t.stringLiteral(`${fn} ${name}.`),
+            path.node.arguments[0].body,
+          ]),
+        );
+      },
+    },
+
+    // Handle instructions encoded into an array by other nodes e.g. concatenation
+    ArrayExpression: {
+      exit(path) {
+        // Converts an instruction in the form: `['__CONCATENATE__', 'ANY children.', ['name == $0', name]]`
+        // into: [`ANY children.name == $0`, name]
+        if (path.node.elements[0].value === "__CONCATENATE__") {
+          path.replaceWith(
+            t.arrayExpression([
+              t.stringLiteral(
+                `${path.node.elements[1].value}${path.node.elements[2].elements[0].value}`,
+              ),
+              ...path.node.elements[2].elements.slice(1),
+            ]),
+          );
+        }
+      },
+    },
+
+    MemberExpression(path) {
+      const stringFn = STRING_FN_MAP[path.node.property?.name];
+      if (stringFn) {
+        // TODO duplicated logic
         let value;
         let capture;
-        if (path.node.right.type === "Identifier") {
-          value = `$${captures}`;
-          capture = path.node.right.name;
-          captures++;
+        const valueNode = path.parentPath.node.arguments[0];
+        if (valueNode.type === "Identifier") {
+          value = `$${referencedVariableCount}`;
+          capture = valueNode.name;
+          referencedVariableCount++;
         } else {
-          value = path.node.right.value;
+          value = `"${valueNode.value}"`;
         }
 
-        path.replaceWith(
+        const property = path.node.object.property.name;
+        const modifier = path.parentPath.node.arguments[1]?.value ? "[c]" : "";
+
+        path.parentPath.replaceWith(
           t.arrayExpression(
             [
-              t.stringLiteral(
-                path.node.left.property.name + " " + operator + " " + value,
-              ),
+              t.stringLiteral(`${property} ${stringFn}${modifier} ${value}`),
               capture ? t.identifier(capture) : undefined,
             ].filter(x => x !== undefined),
           ),
         );
-      },
+      } else {
+        const { name } = path.node.property;
 
-      UnaryExpression(path) {
-        if (path.node.operator !== "!") {
-          throw new Error(
-            `Unsupported operator ${path.node.operator} for UnaryExpression`,
-          );
-        }
-
+        // unary true operator
         path.replaceWith(
-          t.arrayExpression([
-            t.stringLiteral(`${path.node.argument.property.name} == false`),
-          ]),
+          t.arrayExpression([t.stringLiteral(`${name} == true`)]),
         );
-      },
-
-      LogicalExpression: {
-        exit(path) {
-          const els = [
-            t.stringLiteral(
-              `(${path.node.left.elements[0].value} ${path.node.operator} ${path.node.right.elements[0].value})`,
-            ),
-            ...path.node.left.elements.slice(1),
-            ...path.node.right.elements.slice(1),
-          ].filter(x => x !== undefined);
-
-          // console.log({ els });
-          path.replaceWith(t.arrayExpression(els));
-
-          // console.log(path.toString());
-        },
-      },
-
-      CallExpression: {
-        // handle array method calls like .any(x => x.y === z)
-        // by encoding instructions in an ArrayExpression to concatenate a prefix
-        // to the resulting output from parsing the rest of this subtree
-        enter(path) {
-          // path.skip();
-          const fn = ARRAY_FN_MAP[path.node.callee.property.name];
-          // TODO this is a hack so that we also handle string methods, but really these should
-          // be handled in this fn too, i guess (as call expressions not member expressions)
-          if (!fn) return;
-
-          const name = path.node.callee.object.property.name;
-          path.replaceWith(
-            t.arrayExpression([
-              t.stringLiteral("__CONCATENATE__"),
-              t.stringLiteral(`${fn} ${name}.`),
-              path.node.arguments[0].body,
-            ]),
-          );
-        },
-      },
-
-      ArrayExpression: {
-        // Handle encoded instructions after all nodes have been visited
-        exit(path) {
-          if (path.node.elements[0].value === "__CONCATENATE__") {
-            path.replaceWith(
-              t.arrayExpression([
-                t.stringLiteral(
-                  `${path.node.elements[1].value}${path.node.elements[2].elements[0].value}`,
-                ),
-                ...path.node.elements[2].elements.slice(1),
-              ]),
-            );
-          }
-          debugger;
-          // path.replaceWith(t.stringLiteral())
-        },
-      },
-
-      MemberExpression(path) {
-        debugger;
-        // handle calls to string methods
-
-        const stringFn = STRING_FN_MAP[path.node.property?.name];
-        if (stringFn) {
-          // TODO duplicated logic
-          let value;
-          let capture;
-          const valueNode = path.parentPath.node.arguments[0];
-          if (valueNode.type === "Identifier") {
-            value = `$${captures}`;
-            capture = valueNode.name;
-            captures++;
-          } else {
-            value = `"${valueNode.value}"`;
-          }
-
-          const property = path.node.object.property.name;
-          const modifier = path.parentPath.node.arguments[1]?.value
-            ? "[c]"
-            : "";
-
-          path.parentPath.replaceWith(
-            t.arrayExpression(
-              [
-                t.stringLiteral(`${property} ${stringFn}${modifier} ${value}`),
-                capture ? t.identifier(capture) : undefined,
-              ].filter(x => x !== undefined),
-            ),
-          );
-        } else {
-          const { name } = path.node.property;
-
-          // unary true operator
-          path.replaceWith(
-            t.arrayExpression([t.stringLiteral(`${name} == true`)]),
-          );
-        }
-      },
-      //   // result.value += "blah";
-      //   const leftVisitor = makeFilterVisitor();
-      //   const rightVisitor = makeFilterVisitor();
-
-      //   path.get("left").traverse(leftVisitor.visitor);
-      //   path.get("right").traverse(rightVisitor.visitor);
-      //   // console.log(path.get("body"), leftVisitor.result);
-
-      //   result.value += `(${leftVisitor.result.value} ${path.node.operator} ${rightVisitor.result.value})`;
-
-      //   path.skip();
-      // },
+      }
     },
-
-    result,
   };
 };
 
@@ -198,31 +195,28 @@ export default declare(api => {
 
   return {
     name: "realm-typesafe-queries",
-    // inherits: syntaxTypeScript,
 
     visitor: {
+      // When we encounter an arrow function...
       ArrowFunctionExpression: {
         enter(path) {
-          const caller = path.parent?.callee?.property?.name;
+          // Get the name of the function that this arrow fn is being passed as an arg to (if any)
+          const functionName = path.parent?.callee?.property?.name;
 
-          if (caller !== "filtered") {
+          // If the name of that function is not `filtered`, don't transform the function
+          if (functionName !== "filtered") {
             return;
           }
+
+          // Otherwise, visit it with a FilterVisitor, which will transform it into an ArrayExpression of the form:
+          // `["RQL query as string", capturedVariableName1, capturedVariableName2, ...]`
           const visitor = makeFilterVisitor();
-          path.traverse(visitor.visitor);
-          // console.log(path.node.body); //.forEach(x => console.log(x))); // .get("body"));
+          path.traverse(visitor);
           const body = path.node.body;
-          // debugger;
-          // path.node.params = [body.elements[0], body.elements[1]
+
+          // And then make the elements of that resulting array the args to the call to filtered, so we end up with:
+          // `.filtered("RQL query as string", capturedVariableName1, capturedVariableName2, ...)`
           path.parentPath.node.arguments = body.elements;
-          // debugger;
-          // debugger;
-          // path.replaceWith(t.argumentPlaceholder());
-          // path.replaceWith(t.nullLiteral);
-          // path.parentPath.node.arguments = [
-          //   t.stringLiteral(visitor.result.value),
-          //   ...visitor.result.captures.map(capture => t.identifier(capture)),
-          // ];
         },
       },
     },
